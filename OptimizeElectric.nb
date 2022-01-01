@@ -1,0 +1,1008 @@
+(* Content-type: application/vnd.wolfram.mathematica *)
+
+(*** Wolfram Notebook File ***)
+(* http://www.wolfram.com/nb *)
+
+(* CreatedBy='Mathematica 12.3' *)
+
+(*CacheID: 234*)
+(* Internal cache information:
+NotebookFileLineBreakTest
+NotebookFileLineBreakTest
+NotebookDataPosition[       158,          7]
+NotebookDataLength[     37797,       1000]
+NotebookOptionsPosition[     35426,        950]
+NotebookOutlinePosition[     35814,        966]
+CellTagsIndexPosition[     35771,        963]
+WindowFrame->Normal*)
+
+(* Beginning of Notebook Content *)
+Notebook[{
+
+Cell[CellGroupData[{
+Cell["\<\
+Manufacturing an Electric Field Using a Random Walk With Cooling\
+\>", "Title",
+ CellChangeTimes->{{3.850064062071257*^9, 
+  3.8500641028545113`*^9}},ExpressionUUID->"54f92dbd-e3b8-4b85-938f-\
+f17348cec9cc"],
+
+Cell["Ian Friedrichs, Stevens Institute of Technology", "Subtitle",
+ CellChangeTimes->{{3.850064151165504*^9, 3.850064186910887*^9}, {
+  3.850064236339567*^9, 
+  3.8500642686752367`*^9}},ExpressionUUID->"f9179eb5-f7e0-49f8-8190-\
+87ed85cce489"],
+
+Cell[CellGroupData[{
+
+Cell["Introduction", "Section",
+ CellChangeTimes->{{3.850064301914299*^9, 
+  3.850064303858499*^9}},ExpressionUUID->"253b137e-068a-4d3f-a5f6-\
+0c326c5a480d"],
+
+Cell["\<\
+Suppose that the user wants to manufacture an electric field of a specific \
+\[OpenCurlyDoubleQuote]shape\[CloseCurlyDoubleQuote] within a subset of the \
+square plane spanning {{-1,-1}, {,-1,1}, {1,1}, {1,-1}}.
+
+The \[OpenCurlyDoubleQuote]shape\[CloseCurlyDoubleQuote] of the field must be \
+supplied as a vector field (e.g. {5x+y, 2x}).
+
+The rectangular area of interest must be supplied supplied as 4 \
+floating-point numbers corresponding to the minimum and maximum x and y \
+values of the area.
+
+For simplicity, the field will be manufactured using 8 stationary point \
+charges (E-field sources). What\[CloseCurlyQuote]s optimized are the sign and \
+magnitude of  the charge at each point, in order to produce an approximation \
+of the desired field.
+
+The accuracy metric (or loss function) used is the average proportional \
+difference in the field at randomly selected points within the region of \
+interest. The points are replaced every time the loss function is called to \
+avoid overfitting. NOTE that this resampling of points means that the loss \
+will begin to jump around when there are a small number of points.
+
+A neighbor to the current best solution is calculated by varying the charge \
+on a user-specified number of the 8 field sources. The aggressiveness of this \
+varying decreases linearly over time (hence the term \
+\[OpenCurlyDoubleQuote]cooling\[CloseCurlyDoubleQuote] in the title, borrowed \
+from simulated annealing).\
+\>", "Text",
+ CellChangeTimes->{{3.8500643543826923`*^9, 3.850064548037836*^9}, {
+  3.85006460221307*^9, 3.850064953126111*^9}, {3.850065768363015*^9, 
+  3.850065833365028*^9}},ExpressionUUID->"fa5a1900-f7b7-4414-ba83-\
+334afea37418"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell["User Input", "Section",
+ CellChangeTimes->{{3.8500649638775063`*^9, 
+  3.850064966029256*^9}},ExpressionUUID->"25cbba17-9bf4-42f2-b0f6-\
+2a5957170e39"],
+
+Cell[CellGroupData[{
+
+Cell["User-Supplied Field & Region Input", "Subsection",
+ CellChangeTimes->{{3.84998562050124*^9, 3.849985628173109*^9}, {
+  3.849986035116867*^9, 3.849986036414013*^9}, {3.85006500196509*^9, 
+  3.850065005164948*^9}},ExpressionUUID->"c0e681e4-c768-459a-b9d3-\
+a1680d39595d"],
+
+Cell[BoxData[{
+ RowBox[{
+  RowBox[{"userField", ":=", 
+   RowBox[{"{", 
+    RowBox[{
+     RowBox[{"Cos", "[", "x", "]"}], ",", 
+     RowBox[{
+      RowBox[{"-", "0.3"}], 
+      RowBox[{"Sin", "[", "y", "]"}]}]}], "}"}]}], 
+  ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"xMinUser", ":=", "0.5"}], ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"xMaxUser", ":=", "0.75"}], ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"yMinUser", ":=", "0.5"}], ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"yMaxUser", ":=", "0.75"}], ";"}]}], "Input",
+ CellChangeTimes->{{3.8499860436169662`*^9, 3.849986133587368*^9}, {
+  3.849988351724833*^9, 3.849988390871413*^9}, {3.850053577280939*^9, 
+  3.850053583095244*^9}, {3.850064992422317*^9, 3.850064993661755*^9}},
+ CellLabel->
+  "In[2088]:=",ExpressionUUID->"7acd3f05-bf72-4910-946b-bc8d8176fe35"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell["Other User-Supplied Inputs", "Subsection",
+ CellChangeTimes->{{3.849986977596344*^9, 
+  3.849986989402059*^9}},ExpressionUUID->"1e53008b-1760-4417-9e2b-\
+94788ce276b2"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"(*", " ", 
+   RowBox[{
+   "the", " ", "desired", " ", "average", " ", "accuracy", " ", "out", " ", 
+    "of", " ", "1", "\[IndentingNewLine]", " ", 
+    RowBox[{"(", 
+     RowBox[{
+      RowBox[{"i", ".", "e", ".", " ", "the"}], " ", "average", " ", "of", 
+      " ", "the", " ", "separate", " ", "x", " ", "and", " ", "y", " ", 
+      "accuracies"}], ")"}]}], " ", "*)"}], "\[IndentingNewLine]", 
+  RowBox[{
+   RowBox[{
+    RowBox[{"userAcc", "=", "0.95"}], ";"}], "\[IndentingNewLine]", 
+   RowBox[{"(*", " ", 
+    RowBox[{
+    "the", " ", "number", " ", "of", " ", "points", " ", "randomly", " ", 
+     "sampled", " ", "within", " ", "the", " ", "region", " ", "of", " ", 
+     "interest", "\[IndentingNewLine]", "every", " ", "time", " ", "that", 
+     " ", "the", " ", "loss", " ", "function", " ", "is", " ", "calculated"}],
+     " ", "*)"}], "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"numPtsSA", " ", "=", " ", "200"}], ";"}], "\[IndentingNewLine]", 
+   
+   RowBox[{"(*", " ", 
+    RowBox[{
+    "the", " ", "minimum", " ", "and", " ", "maximum", " ", "charge", " ", 
+     "that", " ", "any", " ", "single", " ", "field", " ", "source", " ", 
+     "can", " ", "hold"}], " ", "*)"}], "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"userMinChg", "=", 
+     RowBox[{"-", "10"}]}], ";"}], "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"userMaxChg", "=", "10"}], ";"}], " ", "\[IndentingNewLine]", 
+   RowBox[{"(*", " ", 
+    RowBox[{
+    "the", " ", "maximum", " ", "number", " ", "of", " ", "simulated", " ", 
+     "annealing", " ", "steps", " ", "to", " ", "take"}], " ", "*)"}], 
+   "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"stepsSA", "=", "10000"}], ";"}], "\[IndentingNewLine]", 
+   RowBox[{"(*", " ", 
+    RowBox[{
+    "the", " ", "number", " ", "of", " ", "field", " ", "sources", " ", 
+     "that", " ", "will", " ", "have", " ", "their", " ", "charges", " ", 
+     "varied", "\[IndentingNewLine]", "to", " ", "calulate", " ", "the", " ", 
+     "next", " ", "neighbor"}], " ", "*)"}], "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"numVarySA", "=", "3"}], ";"}], "\[IndentingNewLine]", 
+   RowBox[{"(*", " ", 
+    RowBox[{"the", " ", "maximum", " ", 
+     RowBox[{"(", 
+      RowBox[{"and", " ", "starting"}], ")"}], " ", "percentage", " ", "to", 
+     " ", "vary", " ", "the", " ", "field", " ", "sources", " ", "by", " ", 
+     RowBox[{"(", 
+      RowBox[{"out", " ", "of", " ", "1"}], ")"}]}], " ", "*)"}], 
+   "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"startPercVarySA", "=", " ", "0.7"}], ";"}], 
+   "\[IndentingNewLine]", 
+   RowBox[{"(*", " ", 
+    RowBox[{"print", " ", "out", " ", "the", " ", "loss", " ", "every", " ", 
+     RowBox[{"(", 
+      RowBox[{"numSteps", " ", "/", " ", "factor"}], ")"}], " ", "steps"}], 
+    " ", "*)"}], "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"userPrintModFactor", " ", "=", " ", "1000"}], ";"}]}]}]], "Input",\
+
+ CellChangeTimes->{{3.849989346807267*^9, 3.849989511872364*^9}, {
+   3.849989669197589*^9, 3.8499896794611177`*^9}, {3.849990005774321*^9, 
+   3.849990233610137*^9}, {3.849990629826857*^9, 3.849990718520896*^9}, {
+   3.849990781847946*^9, 3.849990801991686*^9}, {3.850051714217832*^9, 
+   3.850051714322698*^9}, {3.850052190682304*^9, 3.850052190785231*^9}, 
+   3.8500522585050364`*^9, {3.8500525275403843`*^9, 3.850052549818366*^9}, {
+   3.8500528506213713`*^9, 3.850052866380005*^9}, {3.850052930795966*^9, 
+   3.850052969954163*^9}, {3.850053233965992*^9, 3.8500532340002337`*^9}, {
+   3.850053316600808*^9, 3.8500533176438*^9}, {3.850053408330515*^9, 
+   3.850053408393865*^9}, {3.850053657517764*^9, 3.850053709411665*^9}, {
+   3.850063990459321*^9, 3.850063991017518*^9}, {3.850065922740155*^9, 
+   3.8500659763947973`*^9}},
+ CellLabel->
+  "In[2093]:=",ExpressionUUID->"94c070b3-705e-42cb-a756-6d33a6ce3fc8"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell["\<\
+Display the Results of User-Supplied Field Input
+(Alongside the Initial Manufactured State)\
+\>", "Subsection",
+ CellChangeTimes->{{3.84998625894454*^9, 3.849986271344263*^9}, {
+  3.849987093112131*^9, 
+  3.8499871241756153`*^9}},ExpressionUUID->"4a50b09a-711c-4ddf-ad82-\
+55e9945ea662"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"(*", " ", 
+   RowBox[{
+    RowBox[{"for", " ", "the", " ", "user"}], "-", 
+    RowBox[{"supplied", " ", "information"}]}], " ", "*)"}], 
+  "\[IndentingNewLine]", 
+  RowBox[{
+   RowBox[{
+    RowBox[{"userFieldPlt", "=", 
+     RowBox[{"StreamPlot", "[", 
+      RowBox[{"userField", ",", 
+       RowBox[{"{", 
+        RowBox[{"x", ",", 
+         RowBox[{"-", "1"}], ",", "1"}], "}"}], ",", 
+       RowBox[{"{", 
+        RowBox[{"y", ",", 
+         RowBox[{"-", "1"}], ",", "1"}], "}"}], ",", 
+       RowBox[{"StreamPoints", "\[Rule]", "Fine"}], ",", 
+       RowBox[{"StreamColorFunction", "\[Rule]", "Hue"}], ",", 
+       RowBox[{
+       "PlotLabel", "\[Rule]", "\"\<User-Supplied Field + Region\>\""}]}], 
+      "]"}]}], ";"}], "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"interestPointsShow", ":=", 
+     RowBox[{"{", "\[IndentingNewLine]", 
+      RowBox[{
+       RowBox[{"{", 
+        RowBox[{"xMinUser", ",", "yMaxUser"}], "}"}], ",", 
+       RowBox[{"{", 
+        RowBox[{"xMaxUser", ",", "yMaxUser"}], "}"}], ",", 
+       "\[IndentingNewLine]", 
+       RowBox[{"{", 
+        RowBox[{"xMaxUser", ",", "yMinUser"}], "}"}], ",", 
+       RowBox[{"{", 
+        RowBox[{"xMinUser", ",", " ", "yMinUser"}], "}"}], ",", 
+       "\[IndentingNewLine]", 
+       RowBox[{"{", 
+        RowBox[{"xMinUser", ",", "yMaxUser"}], "}"}]}], "}"}]}], ";"}], 
+   "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"interestPlt", " ", "=", 
+     RowBox[{"ListLinePlot", "[", 
+      RowBox[{"interestPointsShow", ",", 
+       RowBox[{"PlotStyle", "\[Rule]", 
+        RowBox[{"Directive", "[", "Thick", "]"}]}]}], "]"}]}], ";"}], 
+   "\[IndentingNewLine]", 
+   RowBox[{"(*", " ", 
+    RowBox[{"for", " ", "the", " ", "manufactured", " ", "field"}], " ", 
+    "*)"}], "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"charges", "=", 
+     RowBox[{"{", "\[IndentingNewLine]", 
+      RowBox[{
+       RowBox[{"{", 
+        RowBox[{
+         RowBox[{"-", "1"}], ",", "1", ",", "1"}], "}"}], ",", 
+       RowBox[{"{", 
+        RowBox[{"0", ",", "1", ",", "1"}], "}"}], ",", 
+       RowBox[{"{", 
+        RowBox[{"1", ",", "1", ",", "1"}], "}"}], ",", "\[IndentingNewLine]", 
+       
+       RowBox[{"{", 
+        RowBox[{
+         RowBox[{"-", "1"}], ",", "0", ",", "1"}], "}"}], ",", 
+       RowBox[{"{", 
+        RowBox[{"1", ",", "0", ",", "1"}], "}"}], ",", "\[IndentingNewLine]", 
+       
+       RowBox[{"{", 
+        RowBox[{
+         RowBox[{"-", "1"}], ",", 
+         RowBox[{"-", "1"}], ",", "1"}], "}"}], ",", 
+       RowBox[{"{", 
+        RowBox[{"0", ",", 
+         RowBox[{"-", "1"}], ",", "1"}], "}"}], ",", 
+       RowBox[{"{", 
+        RowBox[{"1", ",", 
+         RowBox[{"-", "1"}], ",", "1"}], "}"}]}], "}"}]}], ";"}], 
+   "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"manPot", "=", 
+     RowBox[{"Total", "[", 
+      RowBox[{
+       RowBox[{
+        RowBox[{"ePot", "[", 
+         RowBox[{
+          RowBox[{"{", 
+           RowBox[{"x", ",", "y"}], "}"}], ",", "#"}], "]"}], "&"}], "/@", 
+       "charges"}], "]"}]}], ";"}], "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"manField", "=", 
+     RowBox[{"-", 
+      RowBox[{"Grad", "[", 
+       RowBox[{"manPot", ",", 
+        RowBox[{"{", 
+         RowBox[{"x", ",", "y"}], "}"}]}], "]"}]}]}], ";"}], 
+   "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"manFieldPlot", "=", 
+     RowBox[{"StreamPlot", "[", 
+      RowBox[{"manField", ",", 
+       RowBox[{"{", 
+        RowBox[{"x", ",", 
+         RowBox[{"-", "1"}], ",", "1"}], "}"}], ",", 
+       RowBox[{"{", 
+        RowBox[{"y", ",", 
+         RowBox[{"-", "1"}], ",", "1"}], "}"}], ",", 
+       RowBox[{"StreamPoints", "\[Rule]", "Fine"}], ",", 
+       RowBox[{"StreamColorFunction", "\[Rule]", "Hue"}], ",", 
+       RowBox[{
+       "PlotLabel", "\[Rule]", "\"\<Manufactured Field (Initial)\>\""}]}], 
+      "]"}]}], ";"}], "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"manPoints", "=", 
+     RowBox[{"{", 
+      RowBox[{
+       RowBox[{"{", 
+        RowBox[{
+         RowBox[{"-", "1"}], ",", "1"}], "}"}], ",", 
+       RowBox[{"{", 
+        RowBox[{"0", ",", "1"}], "}"}], ",", 
+       RowBox[{"{", 
+        RowBox[{"1", ",", "1"}], "}"}], ",", "\[IndentingNewLine]", 
+       RowBox[{"{", 
+        RowBox[{
+         RowBox[{"-", "1"}], ",", "0"}], "}"}], ",", 
+       RowBox[{"{", 
+        RowBox[{"1", ",", "0"}], "}"}], ",", "\[IndentingNewLine]", 
+       RowBox[{"{", 
+        RowBox[{
+         RowBox[{"-", "1"}], ",", 
+         RowBox[{"-", "1"}]}], "}"}], ",", 
+       RowBox[{"{", 
+        RowBox[{"0", ",", 
+         RowBox[{"-", "1"}]}], "}"}], ",", 
+       RowBox[{"{", 
+        RowBox[{"1", ",", 
+         RowBox[{"-", "1"}]}], "}"}]}], "}"}]}], ";"}], "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"manPointsPlt", "=", 
+     RowBox[{"ListPlot", "[", 
+      RowBox[{"manPoints", ",", 
+       RowBox[{"PlotMarkers", "\[Rule]", 
+        RowBox[{"{", 
+         RowBox[{"Automatic", ",", "Large"}], "}"}]}]}], "]"}]}], ";"}], 
+   "\[IndentingNewLine]", 
+   RowBox[{"(*", " ", 
+    RowBox[{
+     RowBox[{"Now", " ", "show", " ", "close"}], "-", 
+     RowBox[{
+     "ups", " ", "in", " ", "the", " ", "region", " ", "of", " ", 
+      "interest"}]}], " ", "*)"}], "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"manFieldPlotClose", "=", 
+     RowBox[{"StreamPlot", "[", 
+      RowBox[{"manField", ",", 
+       RowBox[{"{", 
+        RowBox[{"x", ",", "xMinUser", ",", "xMaxUser"}], "}"}], ",", 
+       RowBox[{"{", 
+        RowBox[{"y", ",", "yMinUser", ",", "yMaxUser"}], "}"}], ",", 
+       RowBox[{"StreamPoints", "\[Rule]", "Fine"}], ",", 
+       RowBox[{"StreamColorFunction", "\[Rule]", "Hue"}], ",", 
+       RowBox[{
+       "PlotLabel", "\[Rule]", "\"\<Manufactured Field in Region\>\""}]}], 
+      "]"}]}], ";"}], "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"userFieldPltClose", "=", 
+     RowBox[{"StreamPlot", "[", 
+      RowBox[{"userField", ",", 
+       RowBox[{"{", 
+        RowBox[{"x", ",", "xMinUser", ",", "xMaxUser"}], "}"}], ",", 
+       RowBox[{"{", 
+        RowBox[{"y", ",", "yMinUser", ",", "yMaxUser"}], "}"}], ",", 
+       RowBox[{"StreamPoints", "\[Rule]", "Fine"}], ",", 
+       RowBox[{"StreamColorFunction", "\[Rule]", "Hue"}], ",", 
+       RowBox[{"PlotLabel", "\[Rule]", "\"\<User Field in Region\>\""}]}], 
+      "]"}]}], ";"}], "\[IndentingNewLine]", 
+   RowBox[{"GraphicsGrid", "[", 
+    RowBox[{"{", 
+     RowBox[{
+      RowBox[{"{", "\[IndentingNewLine]", 
+       RowBox[{
+        RowBox[{"Show", "[", 
+         RowBox[{"userFieldPlt", ",", "interestPlt"}], "]"}], ",", 
+        "\[IndentingNewLine]", 
+        RowBox[{"Show", "[", 
+         RowBox[{
+         "manFieldPlot", ",", "interestPlt", ",", " ", "manPointsPlt"}], 
+         "]"}]}], "}"}], ",", 
+      RowBox[{"{", 
+       RowBox[{"userFieldPltClose", ",", "manFieldPlotClose"}], "}"}]}], 
+     "}"}], "]"}]}]}]], "Input",
+ CellChangeTimes->CompressedData["
+1:eJxTTMoPSmViYGAQAWIQva3xj4zL+jeOBjMrFUH0IaZgdRAt9XC5Foju2BOu
+D6KFMh55gei805mhIPr8TakoEJ1S+SMRROfLTUoC0UZzuXNB9C9j5gIQLWjW
+3AuizWIrJ4PonN0Ss0A0w+OExSB6S0PnahCtFMuzE0R/aJfbC6KD+nccBNFy
+5nOPguhTJj7nQPSyI08ugej3O/ofgmg+tVsvQfS6WcqvwfpVAjRdgfSJO5lW
+IHol2wx7EL1lp7IDiGaw0XUB0W4rNkaCaPVFTbEg+tS2MxlgdfUCeSD6n0Z4
+OYgW7Jk62Q1Iz/68YAaIXjHzzhoQbXLqOZgGACDapMY=
+  "],
+ CellLabel->
+  "In[2101]:=",ExpressionUUID->"403a6caf-6e93-4c5e-861e-e1df27a9238b"]
+}, Open  ]]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell["Optimization", "Section",
+ CellChangeTimes->{{3.850065113050406*^9, 
+  3.850065115946515*^9}},ExpressionUUID->"093f0859-cff7-4fbc-b40f-\
+f7b84e3c4d53"],
+
+Cell[CellGroupData[{
+
+Cell["Perform the Random Walk", "Subsection",
+ CellChangeTimes->{{3.8500655766011887`*^9, 
+  3.8500655820250797`*^9}},ExpressionUUID->"a4ac6100-fa98-490c-9370-\
+c24d9b34c643"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"(*", " ", 
+   RowBox[{
+    RowBox[{"evaluate", " ", "the", " ", 
+     RowBox[{"user", "'"}], "s", " ", "vector", " ", "field", " ", "at", " ", 
+     "a", " ", "certain", " ", "point", "\[IndentingNewLine]", " ", "point"}],
+     " ", "->", " ", 
+    RowBox[{
+     RowBox[{"vector", "\[IndentingNewLine]", 
+      RowBox[{"(", 
+       RowBox[{"x", ",", "y"}], ")"}]}], " ", "->", " ", 
+     RowBox[{"{", 
+      RowBox[{"x", ",", "y"}], "}"}]}]}], " ", "*)"}], "\[IndentingNewLine]", 
+  
+  RowBox[{
+   RowBox[{
+    RowBox[{"userFieldFunc", "[", 
+     RowBox[{"xIn_", ",", "yIn_"}], "]"}], ":=", 
+    RowBox[{
+     RowBox[{"userField", "/.", 
+      RowBox[{"x", "->", "xIn"}]}], "/.", 
+     RowBox[{"y", "->", "yIn"}]}]}], ";"}]}]], "Input",
+ CellChangeTimes->{{3.850065163658101*^9, 3.850065190225765*^9}},
+ CellLabel->
+  "In[2113]:=",ExpressionUUID->"687ae80c-3fa1-4fdf-bfc8-32fde2509bfa"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"(*", " ", 
+   RowBox[{
+    RowBox[{
+    "calculate", " ", "the", " ", "error", " ", "between", " ", "the", " ", 
+     "user"}], "-", 
+    RowBox[{"supplied", " ", "and", " ", "desired", " ", "field"}]}], " ", 
+   "*)"}], "\[IndentingNewLine]", 
+  RowBox[{
+   RowBox[{
+    RowBox[{"theErr", "[", 
+     RowBox[{"thePoint_", ",", "mff_"}], "]"}], ":=", 
+    RowBox[{"Module", "[", 
+     RowBox[{
+      RowBox[{"{", 
+       RowBox[{"tmpX", ",", "tmpY"}], "}"}], ",", "\[IndentingNewLine]", 
+      RowBox[{
+       RowBox[{"tmpX", "=", 
+        RowBox[{"thePoint", "[", 
+         RowBox[{"[", "1", "]"}], "]"}]}], ";", "\[IndentingNewLine]", 
+       RowBox[{"tmpY", "=", 
+        RowBox[{"thePoint", "[", 
+         RowBox[{"[", "2", "]"}], "]"}]}], ";", "\[IndentingNewLine]", 
+       RowBox[{"Abs", "[", 
+        RowBox[{
+         RowBox[{"(", 
+          RowBox[{
+           RowBox[{"userFieldFunc", "[", 
+            RowBox[{"tmpX", ",", "tmpY"}], "]"}], "-", 
+           RowBox[{"mff", "[", 
+            RowBox[{"tmpX", ",", "tmpY"}], "]"}]}], ")"}], "/", 
+         RowBox[{"userFieldFunc", "[", 
+          RowBox[{"tmpX", ",", "tmpY"}], "]"}]}], "]"}]}]}], 
+     "\[IndentingNewLine]", "]"}]}], "\[IndentingNewLine]", 
+   RowBox[{"(*", " ", 
+    RowBox[{
+    "just", " ", "takes", " ", "the", " ", "results", " ", "of", " ", "one", 
+     " ", "call", " ", "to", " ", "theErr", " ", "and", " ", "averages", " ", 
+     "it"}], " ", "*)"}], "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"avgErr", "[", "thePoint_", "]"}], ":=", 
+    RowBox[{"Module", "[", 
+     RowBox[{
+      RowBox[{"{", "}"}], ",", "\[IndentingNewLine]", 
+      RowBox[{
+       RowBox[{"(", 
+        RowBox[{
+         RowBox[{"thePoint", "[", 
+          RowBox[{"[", "1", "]"}], "]"}], "+", 
+         RowBox[{"thePoint", "[", 
+          RowBox[{"[", "2", "]"}], "]"}]}], ")"}], "/", "2"}]}], 
+     "\[IndentingNewLine]", "]"}]}], "\[IndentingNewLine]", 
+   RowBox[{"(*", " ", 
+    RowBox[{
+    "practice", " ", "for", " ", "testing", " ", "the", " ", "loss", " ", 
+     "function"}], " ", "*)"}], "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"pointsX", " ", "=", " ", 
+     RowBox[{"RandomReal", "[", 
+      RowBox[{
+       RowBox[{"{", 
+        RowBox[{"xMinUser", ",", "xMaxUser"}], "}"}], ",", "numPtsSA"}], 
+      "]"}]}], ";"}], "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"pointsY", " ", "=", " ", 
+     RowBox[{"RandomReal", "[", 
+      RowBox[{
+       RowBox[{"{", 
+        RowBox[{"yMinUser", ",", "yMaxUser"}], "}"}], ",", "numPtsSA"}], 
+      "]"}]}], ";"}], "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"pointsXY", "=", 
+     RowBox[{"Transpose", "@", 
+      RowBox[{"{", 
+       RowBox[{"pointsX", ",", "pointsY"}], "}"}]}]}], ";"}], 
+   "\[IndentingNewLine]", 
+   RowBox[{"(*", " ", 
+    RowBox[{"the", " ", "loss", " ", "function"}], " ", "*)"}], 
+   "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{
+     RowBox[{"lossFunc", "[", "mff_", "]"}], ":=", 
+     RowBox[{
+      RowBox[{"Total", "[", 
+       RowBox[{"avgErr", "/@", 
+        RowBox[{"(", 
+         RowBox[{
+          RowBox[{
+           RowBox[{"theErr", "[", 
+            RowBox[{"#", ",", "mff"}], "]"}], "&"}], "/@", "pointsXY"}], 
+         ")"}]}], "]"}], "/", 
+      RowBox[{"Length", "[", "pointsXY", "]"}]}]}], ";"}], 
+   "\[IndentingNewLine]"}]}]], "Input",
+ CellChangeTimes->{{3.850065321185795*^9, 3.850065452324635*^9}},
+ CellLabel->
+  "In[2114]:=",ExpressionUUID->"7b6544c6-f4d2-4483-9752-51b5f984fcf1"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"(*", " ", 
+   RowBox[{
+   "find", " ", "a", " ", "neighbor", " ", "for", " ", "a", " ", "specific", 
+    " ", "set", " ", "of", " ", "charges", " ", "at", " ", "a", " ", 
+    "certain", " ", "step"}], " ", "*)"}], "\[IndentingNewLine]", 
+  RowBox[{
+   RowBox[{"findNeighbor", "[", 
+    RowBox[{"theCharges_", ",", "theStep_"}], "]"}], ":=", 
+   RowBox[{"Module", "[", 
+    RowBox[{
+     RowBox[{"{", 
+      RowBox[{
+      "indices", ",", " ", "maxVary", ",", "variations", ",", "chargesCpy"}], 
+      "}"}], ",", "\[IndentingNewLine]", 
+     RowBox[{
+      RowBox[{"chargesCpy", "=", "theCharges"}], ";", "\[IndentingNewLine]", 
+      RowBox[{"indices", "=", 
+       RowBox[{"RandomInteger", "[", 
+        RowBox[{
+         RowBox[{"{", 
+          RowBox[{"1", ",", 
+           RowBox[{"Length", "[", "charges", "]"}]}], "}"}], ",", 
+         "numVarySA"}], "]"}]}], ";", "\[IndentingNewLine]", 
+      RowBox[{"maxVary", "=", 
+       RowBox[{
+        RowBox[{"(", 
+         RowBox[{"1.0", "*", 
+          RowBox[{
+           RowBox[{"(", 
+            RowBox[{"stepsSA", "-", "theStep"}], ")"}], "/", "stepsSA"}]}], 
+         ")"}], "*", "startPercVarySA"}]}], ";", "\[IndentingNewLine]", 
+      RowBox[{"variations", "=", 
+       RowBox[{
+        RowBox[{"RandomReal", "[", 
+         RowBox[{
+          RowBox[{"{", 
+           RowBox[{
+            RowBox[{"-", "maxVary"}], ",", "maxVary"}], "}"}], ",", 
+          "numVarySA"}], "]"}], "+", "1.0"}]}], ";", "\[IndentingNewLine]", 
+      RowBox[{"For", "[", 
+       RowBox[{
+        RowBox[{"i", "=", "1"}], ",", 
+        RowBox[{"i", "<=", "numVarySA"}], ",", 
+        RowBox[{"i", "++"}], ",", "\[IndentingNewLine]", 
+        RowBox[{
+         RowBox[{
+          RowBox[{"chargesCpy", "[", 
+           RowBox[{"[", 
+            RowBox[{"indices", "[", 
+             RowBox[{"[", "i", "]"}], "]"}], "]"}], "]"}], "[", 
+          RowBox[{"[", "3", "]"}], "]"}], "=", 
+         RowBox[{
+          RowBox[{"variations", "[", 
+           RowBox[{"[", "i", "]"}], "]"}], "*", 
+          RowBox[{
+           RowBox[{"chargesCpy", "[", 
+            RowBox[{"[", 
+             RowBox[{"indices", "[", 
+              RowBox[{"[", "i", "]"}], "]"}], "]"}], "]"}], "[", 
+           RowBox[{"[", "3", "]"}], "]"}]}]}]}], "\[IndentingNewLine]", "]"}],
+       ";", "\[IndentingNewLine]", "chargesCpy"}]}], "\[IndentingNewLine]", 
+    "]"}]}]}]], "Input",
+ CellChangeTimes->{{3.850065477534994*^9, 3.850065527851246*^9}},
+ CellLabel->
+  "In[2120]:=",ExpressionUUID->"5add51ed-b90a-45bf-88e6-fc028d0e9ac7"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"(*", " ", 
+   RowBox[{"optimization", " ", "loop"}], " ", "*)"}], "\[IndentingNewLine]", 
+  
+  RowBox[{
+   RowBox[{
+    RowBox[{"currentLoss", "=", 
+     RowBox[{"1", "*", 
+      RowBox[{"10", "^", "10"}]}]}], ";"}], "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"currentStep", "=", "1"}], ";"}], "\[IndentingNewLine]", 
+   RowBox[{"(*", " ", 
+    RowBox[{"the", " ", "charges", " ", "are", " ", 
+     RowBox[{"what", "'"}], "s", " ", "bring", " ", "optimized"}], " ", 
+    "*)"}], "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"Timing", "@", 
+     RowBox[{"While", "[", 
+      RowBox[{
+       RowBox[{
+        RowBox[{"currentLoss", " ", ">", 
+         RowBox[{"Abs", "[", 
+          RowBox[{"1", "-", "userAcc"}], "]"}]}], "&&", 
+        RowBox[{"currentStep", "<", "stepsSA"}]}], ",", "\[IndentingNewLine]", 
+       RowBox[{
+        RowBox[{"manPot", "=", 
+         RowBox[{"Total", "[", 
+          RowBox[{
+           RowBox[{
+            RowBox[{"ePot", "[", 
+             RowBox[{
+              RowBox[{"{", 
+               RowBox[{"x", ",", "y"}], "}"}], ",", "#"}], "]"}], "&"}], "/@",
+            "charges"}], "]"}]}], ";", "\[IndentingNewLine]", 
+        RowBox[{"manField", "=", 
+         RowBox[{"-", 
+          RowBox[{"Grad", "[", 
+           RowBox[{"manPot", ",", 
+            RowBox[{"{", 
+             RowBox[{"x", ",", "y"}], "}"}]}], "]"}]}]}], ";", 
+        "\[IndentingNewLine]", 
+        RowBox[{
+         RowBox[{"manFieldFunc", "[", 
+          RowBox[{"xIn_", ",", "yIn_"}], "]"}], ":=", 
+         RowBox[{
+          RowBox[{"manField", "/.", 
+           RowBox[{"x", "->", "xIn"}]}], "/.", 
+          RowBox[{"y", "->", "yIn"}]}]}], ";", "\[IndentingNewLine]", 
+        RowBox[{"chargesTmp", "=", 
+         RowBox[{"findNeighbor", "[", 
+          RowBox[{"charges", ",", "currentStep"}], "]"}]}], ";", 
+        "\[IndentingNewLine]", 
+        RowBox[{"tmpPot", "=", 
+         RowBox[{"Total", "[", 
+          RowBox[{
+           RowBox[{
+            RowBox[{"ePot", "[", 
+             RowBox[{
+              RowBox[{"{", 
+               RowBox[{"x", ",", "y"}], "}"}], ",", "#"}], "]"}], "&"}], "/@",
+            "chargesTmp"}], "]"}]}], ";", "\[IndentingNewLine]", 
+        RowBox[{"tmpField", "=", 
+         RowBox[{"-", 
+          RowBox[{"Grad", "[", 
+           RowBox[{"tmpPot", ",", 
+            RowBox[{"{", 
+             RowBox[{"x", ",", "y"}], "}"}]}], "]"}]}]}], ";", 
+        "\[IndentingNewLine]", 
+        RowBox[{
+         RowBox[{"tmpFieldFunc", "[", 
+          RowBox[{"xIn_", ",", "yIn_"}], "]"}], ":=", 
+         RowBox[{
+          RowBox[{"tmpField", "/.", 
+           RowBox[{"x", "->", "xIn"}]}], "/.", 
+          RowBox[{"y", "->", "yIn"}]}]}], ";", "\[IndentingNewLine]", 
+        RowBox[{"pointsX", " ", "=", " ", 
+         RowBox[{"RandomReal", "[", 
+          RowBox[{
+           RowBox[{"{", 
+            RowBox[{"xMinUser", ",", "xMaxUser"}], "}"}], ",", "numPtsSA"}], 
+          "]"}]}], ";", "\[IndentingNewLine]", 
+        RowBox[{"pointsY", " ", "=", " ", 
+         RowBox[{"RandomReal", "[", 
+          RowBox[{
+           RowBox[{"{", 
+            RowBox[{"yMinUser", ",", "yMaxUser"}], "}"}], ",", "numPtsSA"}], 
+          "]"}]}], ";", "\[IndentingNewLine]", 
+        RowBox[{"pointsXY", "=", 
+         RowBox[{"Transpose", "@", 
+          RowBox[{"{", 
+           RowBox[{"pointsX", ",", "pointsY"}], "}"}]}]}], ";", 
+        "\[IndentingNewLine]", 
+        RowBox[{"manLoss", "=", 
+         RowBox[{"lossFunc", "[", "manFieldFunc", "]"}]}], ";", 
+        "\[IndentingNewLine]", 
+        RowBox[{"tmpLoss", "=", 
+         RowBox[{"lossFunc", "[", "tmpFieldFunc", "]"}]}], ";", 
+        "\[IndentingNewLine]", "\[IndentingNewLine]", 
+        RowBox[{"If", "[", 
+         RowBox[{
+          RowBox[{"tmpLoss", " ", "<", " ", "manLoss"}], ",", 
+          "\[IndentingNewLine]", 
+          RowBox[{"(", "\[IndentingNewLine]", 
+           RowBox[{
+            RowBox[{"currentLoss", "=", "tmpLoss"}], ";", 
+            "\[IndentingNewLine]", 
+            RowBox[{"charges", "=", "chargesTmp"}], ";"}], 
+           "\[IndentingNewLine]", ")"}], ",", "\[IndentingNewLine]", 
+          RowBox[{"(", "\[IndentingNewLine]", 
+           RowBox[{"currentLoss", "=", "manLoss"}], "\[IndentingNewLine]", 
+           ")"}]}], "\[IndentingNewLine]", "]"}], ";", "\[IndentingNewLine]", 
+        
+        RowBox[{"If", "[", 
+         RowBox[{
+          RowBox[{
+           RowBox[{"Mod", "[", 
+            RowBox[{"currentStep", ",", "userPrintModFactor"}], "]"}], "==", 
+           "0"}], ",", "\[IndentingNewLine]", 
+          RowBox[{"Print", "[", 
+           RowBox[{"\"\<Current Loss \>\"", ",", "currentLoss"}], "]"}]}], 
+         "]"}], ";", "\[IndentingNewLine]", 
+        RowBox[{"currentStep", " ", "=", " ", 
+         RowBox[{"currentStep", " ", "+", " ", "1"}]}], ";"}]}], 
+      "\[IndentingNewLine]", "]"}]}], ";"}]}]}]], "Input",
+ CellChangeTimes->CompressedData["
+1:eJwdyU0ogwEAxvFtWbSN1dpQU0vtxGW9xYo5bKJNtgNGE1ZjsrW1shaiRSMO
+Sxg1S1raYRErnwtFlFpTa5PFYU4rsllqB/kY3uc9PP3q+VcbbB1GBo1GE5KD
+HN5IxhDKygPzijwkavRfUBxwMgdJt3wXLNjlKGJDIsniQnV0kw9ppdeN1D9X
+1QzdaW075Fmn1JDlWu2EEdEj5fGaVwdbc21WOOF3OaBAyV+A+Z5xNwy/PizC
+24MVD/ytTXih6Wb6G8qVuwVoPtumD5FOjjUVQzNxz4EySZZy40MjgKkjTQXV
+dZ918OUpXA9PWgZkMCm7orTbdQqYWH5XwdjzZR+USoN6GJ51xiDdcke5Y1Kx
+jaQ5sYcLu/dmKqHonCmEDCbRB3uDtn5YlomUmEl9hxY2/BnOhWDDW/k+TPtT
+cbiuHU1AyWm8AJeiuj/4DxyC4hg=
+  "],
+ CellLabel->
+  "In[2121]:=",ExpressionUUID->"615175cd-3406-4e09-a7a3-835e2509b084"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell["Display the Results of the Random Walk", "Subsection",
+ CellChangeTimes->{{3.8500655902971697`*^9, 
+  3.8500655971288977`*^9}},ExpressionUUID->"b814ce56-8210-4da7-9359-\
+f57fef8b9506"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"(*", " ", 
+   RowBox[{
+    RowBox[{"for", " ", "the", " ", "user"}], "-", 
+    RowBox[{"supplied", " ", "information"}]}], " ", "*)"}], 
+  "\[IndentingNewLine]", 
+  RowBox[{
+   RowBox[{
+    RowBox[{"userFieldPlt", "=", 
+     RowBox[{"StreamPlot", "[", 
+      RowBox[{"userField", ",", 
+       RowBox[{"{", 
+        RowBox[{"x", ",", 
+         RowBox[{"-", "1"}], ",", "1"}], "}"}], ",", 
+       RowBox[{"{", 
+        RowBox[{"y", ",", 
+         RowBox[{"-", "1"}], ",", "1"}], "}"}], ",", 
+       RowBox[{"StreamPoints", "\[Rule]", "Fine"}], ",", 
+       RowBox[{"StreamColorFunction", "\[Rule]", "Hue"}], ",", 
+       RowBox[{
+       "PlotLabel", "\[Rule]", "\"\<User-Supplied Field + Region\>\""}]}], 
+      "]"}]}], ";"}], "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"interestPointsShow", ":=", 
+     RowBox[{"{", "\[IndentingNewLine]", 
+      RowBox[{
+       RowBox[{"{", 
+        RowBox[{"xMinUser", ",", "yMaxUser"}], "}"}], ",", 
+       RowBox[{"{", 
+        RowBox[{"xMaxUser", ",", "yMaxUser"}], "}"}], ",", 
+       "\[IndentingNewLine]", 
+       RowBox[{"{", 
+        RowBox[{"xMaxUser", ",", "yMinUser"}], "}"}], ",", 
+       RowBox[{"{", 
+        RowBox[{"xMinUser", ",", " ", "yMinUser"}], "}"}], ",", 
+       "\[IndentingNewLine]", 
+       RowBox[{"{", 
+        RowBox[{"xMinUser", ",", "yMaxUser"}], "}"}]}], "}"}]}], ";"}], 
+   "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"interestPlt", " ", "=", 
+     RowBox[{"ListLinePlot", "[", 
+      RowBox[{"interestPointsShow", ",", 
+       RowBox[{"PlotStyle", "\[Rule]", 
+        RowBox[{"Directive", "[", "Thick", "]"}]}]}], "]"}]}], ";"}], 
+   "\[IndentingNewLine]", 
+   RowBox[{"(*", " ", 
+    RowBox[{"for", " ", "the", " ", "manufactured", " ", "field"}], " ", 
+    "*)"}], "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"manPot", "=", 
+     RowBox[{"Total", "[", 
+      RowBox[{
+       RowBox[{
+        RowBox[{"ePot", "[", 
+         RowBox[{
+          RowBox[{"{", 
+           RowBox[{"x", ",", "y"}], "}"}], ",", "#"}], "]"}], "&"}], "/@", 
+       "charges"}], "]"}]}], ";"}], "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"manField", "=", 
+     RowBox[{"-", 
+      RowBox[{"Grad", "[", 
+       RowBox[{"manPot", ",", 
+        RowBox[{"{", 
+         RowBox[{"x", ",", "y"}], "}"}]}], "]"}]}]}], ";"}], 
+   "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"manFieldPlot", "=", 
+     RowBox[{"StreamPlot", "[", 
+      RowBox[{"manField", ",", 
+       RowBox[{"{", 
+        RowBox[{"x", ",", 
+         RowBox[{"-", "1"}], ",", "1"}], "}"}], ",", 
+       RowBox[{"{", 
+        RowBox[{"y", ",", 
+         RowBox[{"-", "1"}], ",", "1"}], "}"}], ",", 
+       RowBox[{"StreamPoints", "\[Rule]", "Fine"}], ",", 
+       RowBox[{"StreamColorFunction", "\[Rule]", "Hue"}], ",", 
+       RowBox[{
+       "PlotLabel", "\[Rule]", "\"\<Manufactured Field (Initial)\>\""}]}], 
+      "]"}]}], ";"}], "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"manPoints", "=", 
+     RowBox[{"{", 
+      RowBox[{
+       RowBox[{"{", 
+        RowBox[{
+         RowBox[{"-", "1"}], ",", "1"}], "}"}], ",", 
+       RowBox[{"{", 
+        RowBox[{"0", ",", "1"}], "}"}], ",", 
+       RowBox[{"{", 
+        RowBox[{"1", ",", "1"}], "}"}], ",", "\[IndentingNewLine]", 
+       RowBox[{"{", 
+        RowBox[{
+         RowBox[{"-", "1"}], ",", "0"}], "}"}], ",", 
+       RowBox[{"{", 
+        RowBox[{"1", ",", "0"}], "}"}], ",", "\[IndentingNewLine]", 
+       RowBox[{"{", 
+        RowBox[{
+         RowBox[{"-", "1"}], ",", 
+         RowBox[{"-", "1"}]}], "}"}], ",", 
+       RowBox[{"{", 
+        RowBox[{"0", ",", 
+         RowBox[{"-", "1"}]}], "}"}], ",", 
+       RowBox[{"{", 
+        RowBox[{"1", ",", 
+         RowBox[{"-", "1"}]}], "}"}]}], "}"}]}], ";"}], "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"manPointsPlt", "=", 
+     RowBox[{"ListPlot", "[", 
+      RowBox[{"manPoints", ",", 
+       RowBox[{"PlotMarkers", "\[Rule]", 
+        RowBox[{"{", 
+         RowBox[{"Automatic", ",", "Large"}], "}"}]}]}], "]"}]}], ";"}], 
+   "\[IndentingNewLine]", 
+   RowBox[{"(*", " ", 
+    RowBox[{
+     RowBox[{"Now", " ", "show", " ", "close"}], "-", 
+     RowBox[{
+     "ups", " ", "in", " ", "the", " ", "region", " ", "of", " ", 
+      "interest"}]}], " ", "*)"}], "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"manFieldPlotClose", "=", 
+     RowBox[{"StreamPlot", "[", 
+      RowBox[{"manField", ",", 
+       RowBox[{"{", 
+        RowBox[{"x", ",", "xMinUser", ",", "xMaxUser"}], "}"}], ",", 
+       RowBox[{"{", 
+        RowBox[{"y", ",", "yMinUser", ",", "yMaxUser"}], "}"}], ",", 
+       RowBox[{"StreamPoints", "\[Rule]", "Fine"}], ",", 
+       RowBox[{"StreamColorFunction", "\[Rule]", "Hue"}], ",", 
+       RowBox[{
+       "PlotLabel", "\[Rule]", "\"\<Manufactured Field in Region\>\""}]}], 
+      "]"}]}], ";"}], "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"userFieldPltClose", "=", 
+     RowBox[{"StreamPlot", "[", 
+      RowBox[{"userField", ",", 
+       RowBox[{"{", 
+        RowBox[{"x", ",", "xMinUser", ",", "xMaxUser"}], "}"}], ",", 
+       RowBox[{"{", 
+        RowBox[{"y", ",", "yMinUser", ",", "yMaxUser"}], "}"}], ",", 
+       RowBox[{"StreamPoints", "\[Rule]", "Fine"}], ",", 
+       RowBox[{"StreamColorFunction", "\[Rule]", "Hue"}], ",", 
+       RowBox[{"PlotLabel", "\[Rule]", "\"\<User Field in Region\>\""}]}], 
+      "]"}]}], ";"}], "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"Print", "[", "charges", "]"}], ";"}], "\[IndentingNewLine]", 
+   RowBox[{"GraphicsGrid", "[", 
+    RowBox[{"{", 
+     RowBox[{
+      RowBox[{"{", "\[IndentingNewLine]", 
+       RowBox[{
+        RowBox[{"Show", "[", 
+         RowBox[{"userFieldPlt", ",", "interestPlt"}], "]"}], ",", 
+        "\[IndentingNewLine]", 
+        RowBox[{"Show", "[", 
+         RowBox[{
+         "manFieldPlot", ",", "interestPlt", ",", " ", "manPointsPlt"}], 
+         "]"}]}], "}"}], ",", 
+      RowBox[{"{", 
+       RowBox[{"userFieldPltClose", ",", "manFieldPlotClose"}], "}"}]}], 
+     "}"}], "]"}], "\[IndentingNewLine]"}]}]], "Input",
+ CellChangeTimes->{{3.85006563879352*^9, 3.850065672280655*^9}, {
+  3.850065868431594*^9, 3.850065879004919*^9}},
+ CellLabel->
+  "In[2124]:=",ExpressionUUID->"e88e7cf3-4358-4ee3-af4b-1b06148f38a6"]
+}, Open  ]]
+}, Open  ]]
+}, Open  ]]
+},
+WindowSize->{960, 1006},
+WindowMargins->{{Automatic, 0}, {0, Automatic}},
+FrontEndVersion->"12.3 for Linux x86 (64-bit) (July 9, 2021)",
+StyleDefinitions->"Default.nb",
+ExpressionUUID->"60202a7b-8526-4843-8b74-d0f31617847d"
+]
+(* End of Notebook Content *)
+
+(* Internal cache information *)
+(*CellTagsOutline
+CellTagsIndex->{}
+*)
+(*CellTagsIndex
+CellTagsIndex->{}
+*)
+(*NotebookFileOutline
+Notebook[{
+Cell[CellGroupData[{
+Cell[580, 22, 217, 5, 160, "Title",ExpressionUUID->"54f92dbd-e3b8-4b85-938f-f17348cec9cc"],
+Cell[800, 29, 244, 4, 53, "Subtitle",ExpressionUUID->"f9179eb5-f7e0-49f8-8190-87ed85cce489"],
+Cell[CellGroupData[{
+Cell[1069, 37, 157, 3, 67, "Section",ExpressionUUID->"253b137e-068a-4d3f-a5f6-0c326c5a480d"],
+Cell[1229, 42, 1694, 32, 403, "Text",ExpressionUUID->"fa5a1900-f7b7-4414-ba83-334afea37418"]
+}, Open  ]],
+Cell[CellGroupData[{
+Cell[2960, 79, 157, 3, 67, "Section",ExpressionUUID->"25cbba17-9bf4-42f2-b0f6-2a5957170e39"],
+Cell[CellGroupData[{
+Cell[3142, 86, 275, 4, 54, "Subsection",ExpressionUUID->"c0e681e4-c768-459a-b9d3-a1680d39595d"],
+Cell[3420, 92, 852, 22, 119, "Input",ExpressionUUID->"7acd3f05-bf72-4910-946b-bc8d8176fe35"]
+}, Open  ]],
+Cell[CellGroupData[{
+Cell[4309, 119, 174, 3, 54, "Subsection",ExpressionUUID->"1e53008b-1760-4417-9e2b-94788ce276b2"],
+Cell[4486, 124, 3845, 81, 406, "Input",ExpressionUUID->"94c070b3-705e-42cb-a756-6d33a6ce3fc8"]
+}, Open  ]],
+Cell[CellGroupData[{
+Cell[8368, 210, 297, 7, 81, "Subsection",ExpressionUUID->"4a50b09a-711c-4ddf-ad82-55e9945ea662"],
+Cell[8668, 219, 7346, 201, 647, "Input",ExpressionUUID->"403a6caf-6e93-4c5e-861e-e1df27a9238b"]
+}, Open  ]]
+}, Open  ]],
+Cell[CellGroupData[{
+Cell[16063, 426, 157, 3, 67, "Section",ExpressionUUID->"093f0859-cff7-4fbc-b40f-f7b84e3c4d53"],
+Cell[CellGroupData[{
+Cell[16245, 433, 175, 3, 54, "Subsection",ExpressionUUID->"a4ac6100-fa98-490c-9370-c24d9b34c643"],
+Cell[16423, 438, 921, 25, 97, "Input",ExpressionUUID->"687ae80c-3fa1-4fdf-bfc8-32fde2509bfa"],
+Cell[17347, 465, 3502, 96, 383, "Input",ExpressionUUID->"7b6544c6-f4d2-4483-9752-51b5f984fcf1"],
+Cell[20852, 563, 2577, 66, 251, "Input",ExpressionUUID->"5add51ed-b90a-45bf-88e6-fc028d0e9ac7"],
+Cell[23432, 631, 5513, 136, 691, "Input",ExpressionUUID->"615175cd-3406-4e09-a7a3-835e2509b084"]
+}, Open  ]],
+Cell[CellGroupData[{
+Cell[28982, 772, 190, 3, 54, "Subsection",ExpressionUUID->"b814ce56-8210-4da7-9359-f57fef8b9506"],
+Cell[29175, 777, 6211, 168, 603, "Input",ExpressionUUID->"e88e7cf3-4358-4ee3-af4b-1b06148f38a6"]
+}, Open  ]]
+}, Open  ]]
+}, Open  ]]
+}
+]
+*)
+
